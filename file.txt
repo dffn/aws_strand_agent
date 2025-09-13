@@ -1,1 +1,47 @@
 read me
+I’ll give you a clear, skimmable picture of how the Bedrock Agent in this project works end to end.
+
+What this project does
+A small Python CLI manages an Amazon Bedrock Agent via boto3.
+It handles the agent lifecycle: create → prepare → alias → invoke.
+It streams the agent’s response back to your terminal.
+Lifecycle flow (control plane)
+Configure
+
+You provide: AWS Region, Agent name, Foundation model, Instruction (≥ 40 chars), and the Agent execution role ARN.
+Credentials come from your env/profile or from CLI flags.
+Create agent
+
+CLI calls Bedrock Agents CreateAgent with your instruction/model/role.
+If it already exists (same name), we return the existing agent (idempotent).
+Prepare agent
+
+CLI calls PrepareAgent; Bedrock builds a deployable version.
+We poll status until PREPARED and capture the version.
+Create alias
+
+CLI creates an alias (e.g., prod) that points to the prepared version.
+You can later move this alias to a newer version after re-prepare.
+Update role (optional)
+
+If you change the execution role (permissions), update the agent and re-prepare.
+Invocation flow (runtime)
+Input: agent ID (or ARN) + alias (name/ID/ARN) + your prompt text.
+The CLI calls Bedrock Agent Runtime InvokeAgent.
+Bedrock Agent orchestrates the foundation model (and tools/KBs if configured).
+Response is streamed back as events; the CLI assembles chunks and prints the final text.
+Identities and permissions
+Caller (your IAM user/role) must have:
+bedrock:InvokeAgent on the agent/alias ARN.
+bedrock:InvokeModelWithResponseStream on “*” (model streaming).
+Optional list/get permissions if you want to browse agents/aliases.
+Agent execution role (you supply its ARN) is what the agent uses at runtime to call models/tools.
+Common pitfalls
+Instruction too short (< 40 chars) → Bedrock validation error.
+Invoke before PREPARED or alias not pointing to PREPARED version → empty/no reply.
+Missing InvokeAgent/InvokeModelWithResponseStream permissions → AccessDenied.
+No List permissions → can’t browse aliases; pass alias ID/ARN directly instead.
+Quick flow recap
+Create → Prepare → Alias → Invoke
+To update behavior: change instruction/role → Prepare again → Move alias → Invoke.
+If you want, I can run a quick check: print your caller identity, list agents, and show the alias target to confirm everything is wired before invoking.
